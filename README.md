@@ -17,8 +17,8 @@ Stage의 진행 데이터를 DataAsset으로 정의하고, Step 단위의 Action
 | 구분 | 파일 | 확인할 내용 |
 | --- | --- | --- |
 | 데이터 정의 | [`StageDataAsset.h`](StageCraft/Source/StageCraft/Stage/Data/StageDataAsset.h), [`StageStepData.h`](StageCraft/Source/StageCraft/Stage/Data/StageStepData.h) | Stage와 Step의 데이터 구성 |
-| Action / Condition 공통 기반 | [`StageAction.h`](StageCraft/Source/StageCraft/Stage/Action/StageAction.h) | Action 실행 계약 |
-| Condition 공통 기반 | [`StageCondition.h`](StageCraft/Source/StageCraft/Stage/Condition/StageCondition.h) | Condition 평가 계약 |
+| Action 공통 기반 클래스 | [`StageAction.h`](StageCraft/Source/StageCraft/Stage/Action/StageAction.h) | Action 실행 계약 |
+| Condition 공통 기반 클래스 | [`StageCondition.h`](StageCraft/Source/StageCraft/Stage/Condition/StageCondition.h) | Condition 평가 계약 |
 | Stage 진행 제어 | [`StageInstance.h`](StageCraft/Source/StageCraft/Stage/Runtime/StageInstance.h), [`StageInstance.cpp`](StageCraft/Source/StageCraft/Stage/Runtime/StageInstance.cpp) | Action 실행, Condition 평가, Step 전환 |
 | Actor 생성 Action | [`StageAction_SpawnActor.h`](StageCraft/Source/StageCraft/Stage/Action/StageAction_SpawnActor.h), [`StageAction_SpawnActor.cpp`](StageCraft/Source/StageCraft/Stage/Action/StageAction_SpawnActor.cpp) | Actor 생성 기능 |
 | 처치 조건 평가 | [`StageCondition_KillTarget.h`](StageCraft/Source/StageCraft/Stage/Condition/StageCondition_KillTarget.h), [`StageCondition_KillTarget.cpp`](StageCraft/Source/StageCraft/Stage/Condition/StageCondition_KillTarget.cpp) | KillTarget 조건 평가 |
@@ -28,7 +28,7 @@ Stage의 진행 데이터를 DataAsset으로 정의하고, Step 단위의 Action
 ### Recommended Reading Order
 
 1. `StageDataAsset.h` / `StageStepData.h` — Stage 데이터 정의
-2. `StageAction.h` / `StageCondition.h` — Action / Condition 공통 계약
+2. `StageAction.h` / `StageCondition.h` — Action / Condition 공통 기반 클래스
 3. `StageInstance.h/.cpp` — Stage 진행 제어
 4. `StageAction_SpawnActor.h/.cpp` / `StageCondition_KillTarget.h/.cpp` — 확장 기능 예시
 5. `StageAction_PlaySequence.h/.cpp` — 비동기 Action 완료 흐름
@@ -121,11 +121,13 @@ Camera Shake 재생과 시간 대기를 별도 Action으로 구성하여 연출�
 
 현재 구현된 Condition:
 
-- `UStageCondition_Bool`
-- `UStageCondition_ReachLocation`
-- `UStageCondition_Interaction`
-- `UStageCondition_DialogComplete`
-- `UStageCondition_KillTarget`
+| Condition | 역할 |
+| --- | --- |
+| `UStageCondition_Bool` | 설정된 Bool 조건 평가 |
+| `UStageCondition_ReachLocation` | Player의 목표 위치 도달 여부 평가 |
+| `UStageCondition_Interaction` | 지정 대상과의 상호작용 완료 여부 평가 |
+| `UStageCondition_DialogComplete` | Dialog 완료 여부 평가 |
+| `UStageCondition_KillTarget` | 지정된 ContentId의 Enemy 처치 수 평가 |
 
 ### World Integration
 
@@ -169,7 +171,7 @@ Camera Shake 재생과 시간 대기를 별도 Action으로 구성하여 연출�
 - Delay Action으로 연출 사이의 진행 간격 구성
 - `ULevelSequencePlayer`를 생성하여 Level Sequence 재생
 - `OnFinished` 이벤트를 Action 완료 흐름에 연결
-- Stage 실행기에 특정 Sequence의 재생 코드를 추가하지 않고 Action 데이터로 연동
+- `UStageInstance`에 특정 Sequence의 재생 코드를 추가하지 않고 Action 데이터로 연동
 
 ### Objective Presentation
 
@@ -281,7 +283,7 @@ GameMode는 새 World에서 Flow Subsystem과 World Subsystem을 연결하는 �
 
 ### 데이터와 실행 흐름의 분리
 
-Stage별 Objective / Action / Condition 조합은 DataAsset에 두고, 공통 실행 순서는 StageInstance에서 관리합니다. 기존 기능으로 새 Stage를 구성할 때 실행기의 Stage별 분기를 늘리지 않는 것이 목적입니다.
+Stage별 Objective / Action / Condition 조합은 DataAsset에 두고, 공통 실행 순서는 StageInstance에서 관리합니다. 기존 기능으로 새 Stage를 구성할 때 `UStageInstance`에 Stage별 분기를 추가하지 않는 것이 목적입니다.
 
 Stage 인덱스와 처치 수 등의 진행 상태는 Runtime에 두고 있습니다. 다만 현재 Action / Condition 객체 내부의 Timer·SequencePlayer·Actor 캐시까지 실행별로 분리한 상태는 아니며, 6주차 보완 대상입니다.
 
@@ -324,17 +326,17 @@ Gold는 Player가 보유하고 Flow가 전환 시점에 전달하는 최소 구�
 
 ## Project Structure
 
-전체 프로젝트의 Stage 관련 원본 경로는 `StageCraft/Source/StageCraft/Stage/`입니다. 현재 공개 저장소에는 이 경로 아래 대표 파일만 포함합니다. 향후 필요에 따라 다른 프로젝트 파일을 같은 원본 구조로 추가할 수 있습니다.
+원본 프로젝트의 Stage 관련 경로는 `Source/StageCraft/Stage/`입니다. 공개 저장소에서는 최상위 `StageCraft/` 폴더를 포함하여 `StageCraft/Source/StageCraft/Stage/`에 대표 파일을 배치했습니다. 아래는 **원본 프로젝트의 폴더별 책임**이며, 현재 공개 저장소에는 `Data`, `Runtime`, `Action`, `Condition`의 일부 파일만 포함합니다.
 
-`StageCraft/Source/StageCraft/Stage/`
-
-- `Data/`: Stage / Collection / Step / Objective 정의
-- `Runtime/`: Stage 실행, World 관리, Level 간 Stage 흐름 및 Runtime Context
-- `Action/`: 로그 / 생성 / 대화 / 보상 / Camera Shake / Delay / Sequence
-- `Condition/`: Stage 완료 조건 정의 및 평가
-- `Actor/`: Player / NPC / Enemy / Interaction / Health / World Marker
-- `Animation/`: Attack Hit Animation Notify
-- `UI/`: Stage HUD / Objective / Health / Gold / Stage State UI
+| 폴더 | 책임 |
+| --- | --- |
+| `Data/` | Stage 및 Step 구성에 필요한 데이터 정의 |
+| `Runtime/` | Stage 진행 상태 관리와 실행 흐름 제어, World 및 Level 간 진행 관리 |
+| `Action/` | Step에서 수행할 동작의 공통 기반 클래스 및 기능별 구현 |
+| `Condition/` | Step 완료 조건의 공통 기반 클래스 및 기능별 평가 구현 |
+| `Actor/` | Stage 콘텐츠에 사용되는 Actor와 상호작용 처리 |
+| `Animation/` | 전투 애니메이션과 Gameplay 이벤트 연동 |
+| `UI/` | Stage 진행 상태와 Gameplay 정보 표시 |
 
 ## Roadmap
 
@@ -347,7 +349,7 @@ Gold는 Player가 보유하고 Flow가 전환 시점에 전달하는 최소 구�
 
 ### Developer Support
 
-- Debug Tool 확장
+- 기존 Step 강제 완료 / Exec Console Command 외 Stage·Step·Condition 상태 확인 기능 보완
 - Stage / Collection 데이터 검증
 - 시간 값, Target 설정, Stage 연결 등 잘못된 데이터 확인
 
