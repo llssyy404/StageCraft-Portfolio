@@ -44,51 +44,30 @@ Stage의 진행 데이터를 DataAsset으로 정의하고, Step 단위의 Action
 
 ## Goals
 
-- Stage 진행 데이터를 DataAsset 기반으로 구성
-- Stage 정의 데이터와 Runtime 상태 분리
-- Step 단위의 순차적인 콘텐츠 진행
-- Action / Condition 확장을 통한 다양한 Stage 구성
-- 특정 GameMode에 진행 로직을 작성하지 않는 Stage Runtime 구성
-- 동일한 Framework에서 기존 기능과 데이터 조합으로 서로 다른 Stage 콘텐츠 구성
-- World 단위의 Stage 실행과 Level 간 Stage 전환 책임 분리
+- Stage 정의 데이터를 DataAsset으로 구성하고 Runtime 진행 상태와 분리
+- 공통 StageInstance에서 Step별 Action 실행과 Condition 평가 처리
+- Action / Condition 확장과 기존 기능의 데이터 조합으로 다양한 Stage 구성
+- World 단위 Stage 실행과 Level 간 전환 책임 분리
+- Stage별 실행 분기 추가 없이 서로 다른 두 Stage 구현
 
-새로운 게임플레이 기능은 Action / Condition 등의 C++ 확장이 필요할 수 있습니다. 데이터 기반 구성의 범위는 이미 구현된 기능과 콘텐츠 에셋을 조합하여 Stage 흐름을 변경하는 것입니다.
+새로운 종류의 기능은 C++ Action / Condition 확장이 필요할 수 있습니다. 코드 수정 없이 구성 가능한 범위는 이미 구현된 기능과 콘텐츠 에셋의 조합입니다.
 
 ## Current Features
 
 ### Stage Data
 
-- `UPrimaryDataAsset` 기반 Stage 정의
-- `FStageStepData` 기반 Step 구성
-- 하나의 Stage에 여러 Step 구성
-- Step별 Action / Condition 설정
-- Step별 Objective 데이터 구성
-  - Objective Text
-  - World Marker 표시 여부 및 위치
-- `NextStageId`를 통한 다음 Stage 지정
-- `UStageCollectionDataAsset`에서 Stage ID와 Stage DataAsset / Level 연결
-- DataAsset 구성을 통한 Playable Stage 진행 흐름 구성
+- `UPrimaryDataAsset`과 `FStageStepData` 기반 Stage / Step 정의
+- Step별 Objective(Text, World Marker), Action, Condition 구성
+- `UStageCollectionDataAsset`에서 Stage ID에 대응하는 DataAsset과 Level 관리
+- `NextStageId`를 이용한 다음 Stage 지정
 
 ### Stage Runtime
 
-- `UStageInstance` 기반 Stage Runtime 상태 관리
-- Stage Lifecycle 관리
-  - NotStarted
-  - Ready
-  - Playing
-  - Failed
-  - Completed
-- `Prepare()`와 `Start()`를 분리한 Stage 시작 흐름
-- Ready Duration 이후 실제 Gameplay 시작
-- Step 순차 진행
-- Delegate 기반 Action 순차 실행
-- Action 실행 결과에 따른 성공 / 실패 처리
-- Condition 평가 결과 구분
-  - Satisfied
-  - NotSatisfied
-  - Invalid
-- Runtime 오류 발생 시 Stage Failed 처리
-- 마지막 Step 완료 후 Stage 완료 처리
+- `UStageInstance`에서 Stage Lifecycle(NotStarted / Ready / Playing / Failed / Completed) 및 Step 진행 관리
+- `Prepare()` / `Start()` 분리와 Ready Duration 이후 Gameplay 시작
+- Delegate 기반 Action 순차 실행 및 성공 / 실패 결과 처리
+- Condition 결과(Satisfied / NotSatisfied / Invalid)에 따른 Step 진행 또는 Stage 실패 처리
+- 마지막 Step 완료 시 Stage Completed 전환
 
 ### Action
 
@@ -131,83 +110,46 @@ Camera Shake 재생과 시간 대기를 별도 Action으로 구성하여 연출�
 
 ### World Integration
 
-- `SpawnActor` Action을 통한 World Actor 생성
-- `SpawnLocationTargetTag`를 이용한 생성 위치 Actor 선택
-- Player 위치 기반 `ReachLocation` Condition
-- `IStageInteractable` 기반 Interaction 처리
-- Actor별 `TargetTag`를 이용한 Stage Target 식별
-- NPC Interaction 및 다중 Dialog 진행
-- 상호작용 Actor의 중복 실행 방지 및 Blueprint 연출 이벤트 분리
-- 보물상자 상호작용 콘텐츠 구성
-- Player 이동 / 시점 / 기본 공격
-- Simple Enemy AI
-  - Idle
-  - Chase
-  - Attack
-- `UStageHealthComponent` 기반 Player / Enemy HP 관리
-- Damage / Death 처리
-- Enemy `ContentId`별 Death Count Runtime 상태 관리
-- Death Count 기반 `KillTarget` Condition 평가
-- Enemy Death Animation 및 LifeSpan 기반 제거
+- `SpawnActor` Action을 통한 Actor 생성 및 `SpawnLocationTargetTag` 기반 생성 위치 선택
+- `IStageInteractable`을 이용한 NPC / 보물상자 상호작용과 Dialog 진행
+- Actor별 `TargetTag`를 통한 상호작용·목표 대상 식별
+- `UStageHealthComponent` 기반 HP / Damage / Death 처리
+- Enemy `ContentId`별 처치 수를 Runtime에 기록하고 `KillTarget` Condition에서 평가
 - Reward Action을 통한 Player Gold 지급
 
 ### Combat & Animation
 
-- Player / Enemy Attack Montage 적용
-- Animation Notify 기반 실제 타격 시점 처리
-- 공격 시점의 Forward LineTrace 기반 Hit 판정
-- Player / Enemy별 유효 공격 대상 판정
-- Player / Enemy 공격 판정과 Damage 처리 분리
-- Enemy AI Target과 실제 Hit Target 역할 분리
-- Enemy Death Montage 적용
-- Enemy `AttackMontages` 배열에서 공격 Montage 랜덤 선택
-- 공격 Montage 재생 중 중복 재생 방지
+- Player / Enemy 공격을 Animation Montage로 재생하고 Animation Notify에서 타격 시점 처리
+- 공격 시점의 Forward LineTrace를 이용한 Hit 판정과 Damage 처리 분리
+- Enemy AI의 Idle / Chase / Attack 상태 및 전투 행동 구현
 - 일반 Enemy와 보스에 공통 전투 로직 재사용
-- 캡슐 반경과 AttackReach를 고려한 AI 공격 진입 거리 계산
 
 ### Camera & Sequence
 
-- `UCameraShakeBase` 지정 및 PlayerCameraManager를 통한 Camera Shake 재생
-- Delay Action으로 연출 사이의 진행 간격 구성
-- `ULevelSequencePlayer`를 생성하여 Level Sequence 재생
-- `OnFinished` 이벤트를 Action 완료 흐름에 연결
-- `UStageInstance`에 특정 Sequence의 재생 코드를 추가하지 않고 Action 데이터로 연동
+- Camera Shake / Delay / PlaySequence를 독립된 Action으로 구성하여 연출 조합
+- `ULevelSequencePlayer`의 `OnFinished`를 공통 Action 완료 흐름에 연결
+- 특정 Sequence 재생 코드를 `UStageInstance`에 추가하지 않고 데이터로 연출 연결
 
 ### Objective Presentation
 
-- Step별 Objective 데이터 관리
-- Objective 변경 이벤트 기반 UI 갱신
-- World Objective Marker 표시 / 숨김
-- Objective 데이터 기반 Marker 위치 갱신
-- Stage 시작 시점 차이를 고려한 초기 Objective 동기화
-- Presentation 전용 Objective Marker의 Collision / Navigation 영향 제거
+- Step별 Objective Text와 World Marker 표시·위치 설정
+- Objective 변경 이벤트에 따라 UI 및 World Marker 갱신
+- Stage 시작 시 초기 Objective 동기화
 
 ### Stage UI
 
-- `UStageHUDWidget` 기반 Stage Gameplay UI 구성
-- Objective / Player Health / Gold / Stage State UI
-- Player / Enemy Overhead Health UI
-- Stage State에 따른 Gameplay UI 표시 / 숨김
-- Ready 상태에서 Stage ID 표시
-- Playing 전환 시 Stage Start 표시
-- Reward 표시 이후 Stage Clear 결과 표시
-- Gold 변경 이벤트 기반 현재 Gold 갱신
-- Reward 획득 시 Gold 증가 Animation 표시
-- Health 변경 이벤트 기반 HP UI 갱신
-- 다음 Stage 이동 버튼을 통한 전환 요청
-- Level 전환 후 전달된 Gold를 현재값으로 복원하고 UI 갱신
+- `UStageHUDWidget`을 통해 Objective, Player Health, Gold, Stage 상태 표시
+- Player / Enemy Overhead Health UI 및 Health / Gold 변경 이벤트 기반 갱신
+- Stage Ready / Playing / Completed 상태에 따른 UI 전환
+- Stage Clear 결과 표시와 다음 Stage 이동 요청
 
 ### Stage Flow & Level Transition
 
-- Stage 1 / Stage 2를 별도 Level로 구성
-- StageCollection에서 Stage ID에 대응하는 DataAsset과 Level 조회
-- 현재 Stage의 `NextStageId`를 이용하여 다음 Stage 선택
-- `UStageFlowSubsystem`에서 Level 간 Stage 흐름 관리
-- World 전환 시 현재 Stage Runtime을 새 World에서 생성
-- 전환 전 Player Gold를 임시 보관하고 새 Level의 Player에 전달
-- `ConsumePendingGold()`를 통한 일회성 Gold 전달
+- Stage 1 / Stage 2를 별도 Level로 구성하고 `NextStageId`와 StageCollection으로 전환 대상 조회
+- `UStageFlowSubsystem`에서 Level 간 Stage 흐름 관리, 새 World에서 Stage Runtime 생성
+- 전환 시 Player Gold를 메모리에 임시 보관하고 다음 Level의 Player에 일회성 전달
 
-Gold 전달은 실행 중 Level 전환을 위한 메모리 상태 전달입니다. 디스크 기반 Save / Load는 현재 구현 범위에 포함하지 않습니다.
+Gold 전달은 실행 중 Level 전환을 위한 메모리 상태 전달이며 디스크 기반 Save / Load는 구현하지 않았습니다.
 
 ### Playable Stages
 
@@ -305,15 +247,13 @@ Gold는 Player가 보유하고 Flow가 전환 시점에 전달하는 최소 구�
 
 ## Verification
 
-5주차 개발 중 다음 정상 진행 흐름을 확인했습니다.
+5주차 기준으로 다음 정상 진행 흐름을 확인했습니다.
 
-- Stage 1에서 Stage 2로 Level 전환
-- 전환 전후 Player Gold 유지
-- Stage 2의 연출·보스 전투·보물상자·보상·Stage Clear 통합 흐름
-- 일반 Enemy와 보스의 공격 Montage 재생
-- 보스 공격 Montage 3종 및 재생 중 중복 방지
+- Stage 1 → Stage 2 Level 전환 및 Player Gold 유지
+- Stage 2 연출 → 보스 전투 → 보물상자 상호작용 → 보상 → Stage Clear 통합 진행
+- 일반 Enemy와 보스의 공통 전투 로직 적용
 
-실패·중단·강제 Step 이동 등 비동기 경계 상황과 패키징 실행은 최종 검증 대상으로 남아 있습니다.
+비동기 Action의 실패·중단·강제 Step 이동과 패키징 실행은 추가 검증 대상입니다.
 
 ## Current Limitations
 
@@ -326,7 +266,7 @@ Gold는 Player가 보유하고 Flow가 전환 시점에 전달하는 최소 구�
 
 ## Project Structure
 
-원본 프로젝트의 Stage 관련 경로는 `Source/StageCraft/Stage/`입니다. 공개 저장소에서는 최상위 `StageCraft/` 폴더를 포함하여 `StageCraft/Source/StageCraft/Stage/`에 대표 파일을 배치했습니다. 아래는 **원본 프로젝트의 폴더별 책임**이며, 현재 공개 저장소에는 `Data`, `Runtime`, `Action`, `Condition`의 일부 파일만 포함합니다.
+원본 프로젝트와 공개 저장소는 `StageCraft/Source/StageCraft/Stage/` 폴더 경로를 동일하게 유지합니다. 공개 저장소에는 핵심 설계를 보여주는 대표 C++ 파일 14개만 선별하여 포함했으며, 아래 표는 전체 프로젝트의 Stage 폴더별 책임을 설명합니다.
 
 | 폴더 | 책임 |
 | --- | --- |
@@ -355,11 +295,8 @@ Gold는 Player가 보유하고 Flow가 전환 시점에 전달하는 최소 구�
 
 ### Portfolio Polish
 
-- Final Integration Testing 및 패키징 실행 확인
-- Architecture / Runtime Flow 문서화
-- 대표 코드와 설계 선택·Trade-off 정리
-- 두 Stage 시연 영상 및 스크린샷
-- Portfolio PDF
+- 통합 테스트 및 패키징 실행 확인
+- 설계 설명, 대표 코드 및 시연 자료 최종 정리
 
 ### Deferred
 
