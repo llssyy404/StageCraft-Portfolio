@@ -97,6 +97,7 @@ void UStageInstance::Fail()
 		return;
 	}
 
+	CleanupCurrentAction();
 	SetStageState(EStageState::Failed);
 }
 
@@ -148,6 +149,9 @@ void UStageInstance::CompleteCurrentStep()
 	}
 
 	StageStepState = EStageStepState::Completed;
+
+	CleanupCurrentAction();
+	
 	AdvanceStep();
 }
 
@@ -263,11 +267,34 @@ void UStageInstance::ExecuteCurrentAction()
 
 	Action->OnCompleted.Clear();
 	Action->OnCompleted.AddUObject(this, &UStageInstance::OnActionCompleted);
+	
+	bCurrentActionRunning = true;
 	Action->Execute(StageContext);
 }
 
 void UStageInstance::OnActionCompleted(bool bInSuccess)
 {
+	if (StepData == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Invalid StepData"));
+		return;
+	}
+
+	if (StageState != EStageState::Playing || StageStepState != EStageStepState::ExecutingActions
+		|| bCurrentActionRunning == false)
+	{
+		return;
+	}
+	
+	bCurrentActionRunning = false;
+
+	UStageAction* Action = StepData->Actions.IsValidIndex(CurrentActionIndex) ? StepData->Actions[CurrentActionIndex] : nullptr;
+	if (IsValid(Action))
+	{
+		Action->OnCompleted.RemoveAll(this);
+		Action->Release();
+	}
+
 	if (bInSuccess)
 	{
 		++CurrentActionIndex;
@@ -276,6 +303,29 @@ void UStageInstance::OnActionCompleted(bool bInSuccess)
 	else
 	{
 		Fail();
+	}
+}
+
+void UStageInstance::CleanupCurrentAction()
+{
+	if (bCurrentActionRunning == false)
+	{
+		return;
+	}
+
+	bCurrentActionRunning = false;
+
+	if (StepData == nullptr)
+	{
+		return;
+	}
+
+	UStageAction* Action = StepData->Actions.IsValidIndex(CurrentActionIndex) ? StepData->Actions[CurrentActionIndex] : nullptr;
+	if (IsValid(Action))
+	{
+		Action->OnCompleted.RemoveAll(this);
+		Action->Abort();
+		Action->Release();
 	}
 }
 

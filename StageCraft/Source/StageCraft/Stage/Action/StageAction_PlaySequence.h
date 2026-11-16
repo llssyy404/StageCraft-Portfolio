@@ -16,6 +16,8 @@ class STAGECRAFT_API UStageAction_PlaySequence : public UStageAction
 	
 public:
 	virtual void Execute(const FStageContext& InContext) override;
+	virtual void Release() override;
+	virtual void Abort() override;
 
 private:
 	UFUNCTION()

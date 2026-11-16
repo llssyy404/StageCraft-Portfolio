@@ -20,6 +20,9 @@ class STAGECRAFT_API UStageAction : public UObject
 public:
 	virtual void Execute(const FStageContext& InContext)
 		PURE_VIRTUAL(UStageAction::Execute, );
+	
+	virtual void Release() {}
+	virtual void Abort() {}
 
 public:
 	FOnStageActionCompleted OnCompleted;

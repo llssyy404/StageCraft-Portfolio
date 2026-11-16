@@ -68,6 +68,7 @@ private:
 
 	void ExecuteCurrentAction();
 	void OnActionCompleted(bool bInSuccess);
+	void CleanupCurrentAction();
 
 	EStageConditionResult CheckConditions();
 
@@ -81,6 +82,7 @@ private:
 	EStageStepState StageStepState = EStageStepState::None;
 	int32 CurrentStepIndex = INDEX_NONE;
 	int32 CurrentActionIndex = INDEX_NONE;
+	bool bCurrentActionRunning = false;
 
 	const FStageStepData* StepData = nullptr;
 

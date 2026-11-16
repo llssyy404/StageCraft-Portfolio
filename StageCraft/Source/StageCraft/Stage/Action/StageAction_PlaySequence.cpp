@@ -38,12 +38,26 @@ void UStageAction_PlaySequence::Execute(const FStageContext& InContext)
 	SequencePlayer->Play();
 }
 
-void UStageAction_PlaySequence::OnSequenceFinished()
+void UStageAction_PlaySequence::Release()
 {
 	if (IsValid(SequencePlayer))
 	{
 		SequencePlayer->OnFinished.RemoveDynamic(this, &UStageAction_PlaySequence::OnSequenceFinished);
 	}
 
+	SequencePlayer = nullptr;
+}
+
+void UStageAction_PlaySequence::Abort()
+{
+	if (IsValid(SequencePlayer))
+	{
+		SequencePlayer->OnFinished.RemoveDynamic(this, &UStageAction_PlaySequence::OnSequenceFinished);
+		SequencePlayer->Stop();
+	}
+}
+
+void UStageAction_PlaySequence::OnSequenceFinished()
+{
 	OnCompleted.Broadcast(true);
 }
