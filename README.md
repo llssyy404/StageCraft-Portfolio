@@ -6,9 +6,9 @@ Stage의 진행 데이터를 DataAsset으로 정의하고, Step 단위의 Action
 
 현재는 서로 다른 두 Level의 Stage를 동일한 Runtime으로 실행하며, 연출·전투·상호작용·보상을 기존 Action / Condition과 콘텐츠 에셋의 조합으로 구성합니다.
 
-> 개발 현황: 5주차 완료 기준. 6주차에는 비동기 실행 수명 관리, Runtime 상태 분리 보완, Debug / Validation 및 최종 포트폴리오 정리를 진행합니다.
+> 개발 현황: Stage 1·2 구현 및 비동기 Action 종료 처리 안정화 완료. Debug / Data Validation은 향후 개선 항목입니다.
 
-> 이 저장소는 StageCraft의 **대표 C++ 소스코드 14개 파일**을 공개합니다. 전체 Unreal Engine 프로젝트 및 에셋을 포함하지 않으므로 이 저장소만으로 빌드하거나 실행할 수 없습니다. 아래 기능 설명은 전체 StageCraft 프로젝트의 5주차 구현을 기준으로 작성했습니다.
+> 이 저장소는 StageCraft의 **대표 C++ 소스코드 14개 파일**을 공개합니다. 전체 Unreal Engine 프로젝트 및 에셋을 포함하지 않으므로 이 저장소만으로 빌드하거나 실행할 수 없습니다. 아래 기능 설명은 전체 StageCraft 프로젝트의 구현 및 검증 내용을 기준으로 작성했습니다.
 
 ## Representative C++ Source Code
 
@@ -17,9 +17,9 @@ Stage의 진행 데이터를 DataAsset으로 정의하고, Step 단위의 Action
 | 구분 | 파일 | 확인할 내용 |
 | --- | --- | --- |
 | 데이터 정의 | [`StageDataAsset.h`](StageCraft/Source/StageCraft/Stage/Data/StageDataAsset.h), [`StageStepData.h`](StageCraft/Source/StageCraft/Stage/Data/StageStepData.h) | Stage와 Step의 데이터 구성 |
-| Action 공통 기반 클래스 | [`StageAction.h`](StageCraft/Source/StageCraft/Stage/Action/StageAction.h) | Action 실행 계약 |
+| Action 공통 기반 클래스 | [`StageAction.h`](StageCraft/Source/StageCraft/Stage/Action/StageAction.h) | Action 실행·완료·중단·정리 계약 |
 | Condition 공통 기반 클래스 | [`StageCondition.h`](StageCraft/Source/StageCraft/Stage/Condition/StageCondition.h) | Condition 평가 계약 |
-| Stage 진행 제어 | [`StageInstance.h`](StageCraft/Source/StageCraft/Stage/Runtime/StageInstance.h), [`StageInstance.cpp`](StageCraft/Source/StageCraft/Stage/Runtime/StageInstance.cpp) | Action 실행, Condition 평가, Step 전환 |
+| Stage 진행 제어 | [`StageInstance.h`](StageCraft/Source/StageCraft/Stage/Runtime/StageInstance.h), [`StageInstance.cpp`](StageCraft/Source/StageCraft/Stage/Runtime/StageInstance.cpp) | Action 실행·정리, Condition 평가, Step 전환 |
 | Actor 생성 Action | [`StageAction_SpawnActor.h`](StageCraft/Source/StageCraft/Stage/Action/StageAction_SpawnActor.h), [`StageAction_SpawnActor.cpp`](StageCraft/Source/StageCraft/Stage/Action/StageAction_SpawnActor.cpp) | Actor 생성 기능 |
 | 처치 조건 평가 | [`StageCondition_KillTarget.h`](StageCraft/Source/StageCraft/Stage/Condition/StageCondition_KillTarget.h), [`StageCondition_KillTarget.cpp`](StageCraft/Source/StageCraft/Stage/Condition/StageCondition_KillTarget.cpp) | KillTarget 조건 평가 |
 | Sequence 연출 Action | [`StageAction_PlaySequence.h`](StageCraft/Source/StageCraft/Stage/Action/StageAction_PlaySequence.h), [`StageAction_PlaySequence.cpp`](StageCraft/Source/StageCraft/Stage/Action/StageAction_PlaySequence.cpp) | 시퀀스 재생 및 완료 이벤트 |
@@ -68,6 +68,8 @@ Stage의 진행 데이터를 DataAsset으로 정의하고, Step 단위의 Action
 - Delegate 기반 Action 순차 실행 및 성공 / 실패 결과 처리
 - Condition 결과(Satisfied / NotSatisfied / Invalid)에 따른 Step 진행 또는 Stage 실패 처리
 - 마지막 Step 완료 시 Stage Completed 전환
+- Ready 상태에서 사망 시 Ready 타이머를 취소하고 Failed 전환
+- Stage 실패·Step 강제 완료·World 종료 시 실행 중인 Action 정리
 
 ### Action
 
@@ -75,6 +77,8 @@ Stage의 진행 데이터를 DataAsset으로 정의하고, Step 단위의 Action
 - DataAsset에서 Action을 Inline Instance로 구성
 - 현재 Action의 완료 이벤트를 받은 후 다음 Action 실행
 - 동기 Action과 Timer / Sequence 기반 비동기 Action을 같은 순차 실행 흐름에 연결
+- 비동기 Action의 정상 완료 시 `Release()`, 강제 중단 시 `Abort()` / `Release()` 호출
+- 현재 Action 실행 상태를 확인해 중복 정리 방지
 
 현재 구현된 Action:
 
@@ -181,7 +185,7 @@ NPC 대화, 이동 목표, 다수 Enemy 전투와 보상을 통합한 Stage입�
 
 Stage Data 조회 → StageInstance 생성 → Prepare → Ready → Start → Playing → Start Step → Actions 순차 실행 → Conditions 평가 → Complete Step → 다음 Step 또는 Stage Completed
 
-Action은 현재 Action의 완료 이벤트를 받은 뒤 다음 Action을 실행합니다. Delay는 Timer 만료 후, PlaySequence는 Sequence의 자연 종료 후 완료를 알립니다.
+Action은 현재 Action의 완료 이벤트를 받은 뒤 다음 Action을 실행합니다. Delay는 Timer 만료 후, PlaySequence는 Sequence의 자연 종료 후 완료를 알립니다. Stage 실패·Step 강제 완료 시 실행 중인 Action을 중단·정리하며, World 종료 시에는 `Shutdown()`으로 Runtime 자원을 정리합니다.
 
 모든 Action 실행이 끝나면 Step의 Condition을 평가합니다. 모든 Condition이 만족되면 다음 Step으로 진행합니다.
 
@@ -200,8 +204,8 @@ GameMode는 새 World에서 Flow Subsystem과 World Subsystem을 연결하는 �
 | `UStageDataAsset` | Stage ID, NextStageId, Ready Duration, Steps와 Objective / Action / Condition 설정 정의 |
 | `UStageCollectionDataAsset` | Stage ID에 대응하는 Stage DataAsset과 Level 조회 |
 | `UStageFlowSubsystem` | GameInstance 수명에서 Stage 선택, Level 전환 조정, Gold 임시 전달 |
-| `UStageSubsystem` | 현재 World의 StageInstance 생성·보유, Update 전달, Runtime 해제 |
-| `UStageInstance` | 하나의 Stage Lifecycle, Current Step, Action 순서, Condition 판정, Objective 및 진행 상태 관리 |
+| `UStageSubsystem` | 현재 World의 StageInstance 생성·보유, Update 전달, World 종료 시 Shutdown 요청 |
+| `UStageInstance` | 하나의 Stage Lifecycle, Current Step, Action 순서·생명주기, Condition 판정, Objective 및 진행 상태 관리 |
 | `FStageContext` | World Context, ContentId별 Enemy Death Count 등 실행 중 공유 상태 |
 | GameMode | World 초기화 시 Flow와 World Subsystem 연결 |
 
@@ -227,13 +231,17 @@ GameMode는 새 World에서 Flow Subsystem과 World Subsystem을 연결하는 �
 
 Stage별 Objective / Action / Condition 조합은 DataAsset에 두고, 공통 실행 순서는 StageInstance에서 관리합니다. 기존 기능으로 새 Stage를 구성할 때 `UStageInstance`에 Stage별 분기를 추가하지 않는 것이 목적입니다.
 
-Stage 인덱스와 처치 수 등의 진행 상태는 Runtime에 두고 있습니다. 다만 현재 Action / Condition 객체 내부의 Timer·SequencePlayer·Actor 캐시까지 실행별로 분리한 상태는 아니며, 6주차 보완 대상입니다.
+Stage 인덱스와 처치 수 등의 진행 상태는 Runtime에 둡니다. 현재는 단일 Stage에서 Action을 순차 실행하므로 Action / Condition의 실행별 Runtime 객체를 별도로 생성하지 않습니다. 필요한 실행 자원은 Action의 완료·중단·정리 경로에서 관리합니다.
 
 ### 다형성을 통한 기능 확장
 
 StageInstance는 구체 Action의 연출·보상·생성 구현 대신 기반 타입의 실행 및 완료 계약을 사용합니다. CameraShake / Delay / PlaySequence 역시 이 흐름에 연결했습니다.
 
-이는 기존 실행 흐름을 유지하면서 기능을 추가하는 확장 방식입니다. 대신 각 Action이 완료·실패를 일관되게 알리고 실행 자원을 정리해야 하므로, 비동기 Action의 수명 관리가 필요합니다.
+이는 기존 실행 흐름을 유지하면서 기능을 추가하는 확장 방식입니다. 비동기 Action은 완료 이벤트로 진행하며, StageInstance가 현재 Action의 실행 상태와 정리 순서를 관리합니다.
+
+### Stage 실패와 World 종료의 구분
+
+`Fail()`은 Stage 상태를 Failed로 전환하고 필요한 실행 자원을 정리합니다. 반면 `Shutdown()`은 World 종료 시 Runtime 자원만 정리하며, 이를 Stage 실패로 취급하지 않습니다. 종료 시점의 통지 책임은 World Subsystem, 현재 Action 정리 책임은 StageInstance, 실제 비동기 자원 정리 책임은 개별 Action에 둡니다.
 
 ### 상호작용과 콘텐츠 연출의 분리
 
@@ -247,19 +255,19 @@ Gold는 Player가 보유하고 Flow가 전환 시점에 전달하는 최소 구�
 
 ## Verification
 
-5주차 기준으로 다음 정상 진행 흐름을 확인했습니다.
+다음 정상 진행 및 예외 상황을 실행·디버깅으로 확인했습니다.
 
 - Stage 1 → Stage 2 Level 전환 및 Player Gold 유지
 - Stage 2 연출 → 보스 전투 → 보물상자 상호작용 → 보상 → Stage Clear 통합 진행
 - 일반 Enemy와 보스의 공통 전투 로직 적용
 
-비동기 Action의 실패·중단·강제 Step 이동과 패키징 실행은 추가 검증 대상입니다.
+- Ready 중 플레이어 사망 시 Failed 전환 및 Ready 타이머 취소
+- Delay / PlaySequence 실행 중 종료 시 `Abort()` / `Release()` 호출
+- Stage 실패·Step 강제 완료 시 실행 중 Action 정리 및 중복 정리 방지
+
 
 ## Current Limitations
 
-- 비동기 Action 대기 중 Stage 실패 또는 Step 강제 완료 시, 이전 완료 이벤트가 진행에 영향을 주지 않도록 검증·취소·정리 보완 필요
-- DataAsset에 포함된 Action / Condition의 실행별 Runtime 객체 분리 필요
-- Sequence 자연 종료 외 외부 Stop / 취소 경로 보완 필요
 - Level 전환 실패, 중복 요청 및 Gold 캡처 실패 처리 보완 필요
 - Stage 2 Level 직접 실행 시 Stage 데이터 선택 정책 정리 필요
 - Save / Load는 보류
@@ -280,24 +288,11 @@ Gold는 Player가 보유하고 Flow가 전환 시점에 전달하는 최소 구�
 
 ## Roadmap
 
-### Week 6 — Runtime Reliability
+### Developer Support (향후 개선)
 
-- 비동기 Action 완료 검증 및 종료·취소 정리
-- Action / Condition 실행별 Runtime 상태 분리
-- Level 전환 오류 처리 및 초기 Stage 선택 정책 정리
-- 실패·중단·강제 Step 이동을 포함한 통합 테스트
-
-### Developer Support
-
-- 기존 Step 강제 완료 / Exec Console Command 외 Stage·Step·Condition 상태 확인 기능 보완
-- Stage / Collection 데이터 검증
-- 시간 값, Target 설정, Stage 연결 등 잘못된 데이터 확인
-
-### Portfolio Polish
-
-- 통합 테스트 및 패키징 실행 확인
-- 설계 설명, 대표 코드 및 시연 자료 최종 정리
+- Debug Tool: Stage·Step·Condition 상태 확인 및 테스트 기능 보완
+- Data Validation: 잘못된 Step, Null Target, Stage 연결 및 데이터 설정 검사
 
 ### Deferred
 
-- 최소 범위의 Save / Load
+- 디스크 기반 Save / Load

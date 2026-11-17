@@ -91,10 +91,15 @@ void UStageInstance::Complete()
 
 void UStageInstance::Fail()
 {
-	if (StageState != EStageState::Playing)
+	if (StageState != EStageState::Ready && StageState != EStageState::Playing)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Invalid StageState. CurrentState : %s"), *UEnum::GetValueAsString(StageState));
 		return;
+	}
+
+	if (StageState == EStageState::Ready)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ReadyTimerHandle);
 	}
 
 	CleanupCurrentAction();
@@ -112,6 +117,19 @@ void UStageInstance::Update(float InDeltaTime)
 	{
 		TryCompleteStep();
 	}
+}
+
+void UStageInstance::Shutdown()
+{
+	if (StageState == EStageState::Ready)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(ReadyTimerHandle);
+		}
+	}
+
+	CleanupCurrentAction();
 }
 
 FName UStageInstance::GetStageId() const

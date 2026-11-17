@@ -47,6 +47,7 @@ public:
 	void Complete();
 	void Fail();
 	void Update(float InDeltaTime);
+	void Shutdown();
 
 	FName GetStageId() const;
 	FStageObjective GetCurrentObjective() const;
