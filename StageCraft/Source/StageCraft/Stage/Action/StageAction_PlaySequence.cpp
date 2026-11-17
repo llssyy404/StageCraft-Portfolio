@@ -1,10 +1,9 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 
 #include "Stage/Action/StageAction_PlaySequence.h"
 
 #include "LevelSequence.h"
 #include "LevelSequencePlayer.h"
+#include "LevelSequenceActor.h"
 
 
 void UStageAction_PlaySequence::Execute(const FStageContext& InContext)
@@ -24,15 +23,17 @@ void UStageAction_PlaySequence::Execute(const FStageContext& InContext)
 	}
 
 	FMovieSceneSequencePlaybackSettings PlaybackSettings;
-	ALevelSequenceActor* SequenceActor = nullptr;
+	ALevelSequenceActor* CreatedActor = nullptr;
 
-	SequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(InContext.World, LevelSequence, PlaybackSettings, SequenceActor);
+	SequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(InContext.World, LevelSequence, PlaybackSettings, CreatedActor);
 	if (!IsValid(SequencePlayer))
 	{
 		UE_LOG(LogTemp, Error, TEXT("UStageAction_PlaySequence::Execute, Failed to create SequencePlayer !!"));
 		OnCompleted.Broadcast(false);
 		return;
 	}
+
+	SequenceActor = CreatedActor;
 
 	SequencePlayer->OnFinished.AddDynamic(this, &UStageAction_PlaySequence::OnSequenceFinished);
 	SequencePlayer->Play();
@@ -44,8 +45,13 @@ void UStageAction_PlaySequence::Release()
 	{
 		SequencePlayer->OnFinished.RemoveDynamic(this, &UStageAction_PlaySequence::OnSequenceFinished);
 	}
-
 	SequencePlayer = nullptr;
+
+	if (IsValid(SequenceActor))
+	{
+		SequenceActor->Destroy();
+	}
+	SequenceActor = nullptr;
 }
 
 void UStageAction_PlaySequence::Abort()

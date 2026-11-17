@@ -1,4 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -6,9 +5,6 @@
 #include "Stage/Condition/StageCondition.h"
 #include "StageCondition_KillTarget.generated.h"
 
-/**
- * 
- */
 UCLASS()
 class STAGECRAFT_API UStageCondition_KillTarget : public UStageCondition
 {

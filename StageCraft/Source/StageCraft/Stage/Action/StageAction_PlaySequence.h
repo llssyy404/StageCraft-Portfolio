@@ -1,4 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -8,6 +7,7 @@
 
 class ULevelSequence;
 class ULevelSequencePlayer;
+class ALevelSequenceActor;
 
 UCLASS()
 class STAGECRAFT_API UStageAction_PlaySequence : public UStageAction
@@ -28,5 +28,8 @@ private:
 	TObjectPtr<ULevelSequence> LevelSequence;
 
 	UPROPERTY(Transient)
-	TObjectPtr<ULevelSequencePlayer> SequencePlayer;
+	TObjectPtr<ULevelSequencePlayer> SequencePlayer = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ALevelSequenceActor> SequenceActor = nullptr;
 };

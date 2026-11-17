@@ -1,4 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -7,9 +6,6 @@
 #include "StageStepData.h"
 #include "StageDataAsset.generated.h"
 
-/**
- * 
- */
 UCLASS()
 class STAGECRAFT_API UStageDataAsset : public UPrimaryDataAsset
 {

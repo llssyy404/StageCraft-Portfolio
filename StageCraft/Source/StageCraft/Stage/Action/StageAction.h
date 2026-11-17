@@ -1,4 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -9,9 +8,6 @@
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnStageActionCompleted, bool/*bSuccess*/);
 
-/**
- * 
- */
 UCLASS(Abstract, EditInlineNew, DefaultToInstanced)
 class STAGECRAFT_API UStageAction : public UObject
 {
